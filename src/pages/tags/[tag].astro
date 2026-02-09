@@ -1,74 +1,85 @@
 ---
+// 1. 开启 SSR 模式
+export const prerender = false;
+
 import HomeSider from '@components/layout/HomeSider.astro';
 import Cover from '@components/ui/cover/Cover.astro';
 import { CONTENT_PADDING } from '@constants/layout';
 import { siteConfig } from '@constants/site-config';
 import Layout from '@layouts/Layout.astro';
 import TwoColumnLayout from '@layouts/TwoColumnLayout.astro';
-import { getPostLastCategory, getSortedPosts, normalizeTag } from '@lib/content';
+import { transformWPPost } from '@lib/content'; // 使用你之前定义的扁平化转换函数
 import { displayDate } from '@lib/date';
-import { encodeSlug } from '@lib/route';
 
-export async function getStaticPaths() {
-  const posts = await getSortedPosts();
-  const tags = new Set<string>();
+// 2. 获取参数
+const { tag } = Astro.params;
+const WP_URL = 'https://www.yuxh.cc';
 
-  posts.forEach((post) => {
-    const postTags = post.data.tags || [];
-    postTags.forEach((tag) => {
-      tags.add(normalizeTag(tag));
-    });
-  });
+/**
+ * 3. SSR 数据获取逻辑
+ */
+// A. 先根据 tag slug 找到 WordPress 中的标签对象（获取 ID）
+const tagRes = await fetch(`${WP_URL}/wp-json/wp/v2/tags?slug=${tag}`);
+const tagData = await tagRes.json();
 
-  return Array.from(tags).map((tag) => ({
-    params: { tag: normalizeTag(tag).replace(/\//g, '-') },
-    props: {
-      posts: posts.filter((post) => post.data.tags?.some((t) => normalizeTag(t) === tag)),
-      tag,
-    },
-  }));
+if (!tagData || tagData.length === 0) {
+  return Astro.redirect('/404');
 }
 
-const { tag, posts } = Astro.props;
+const targetTag = tagData[0];
+const tagName = targetTag.name; // 真实的标签名称（如 "Docker"）
+
+// B. 根据标签 ID 获取该标签下的文章列表
+const postsRes = await fetch(`${WP_URL}/wp-json/wp/v2/posts?tags=${targetTag.id}&per_page=100&_embed`);
+const rawPosts = await postsRes.json();
+
+// C. 转换数据格式
+const posts = Array.isArray(rawPosts) ? rawPosts.map(transformWPPost) : [];
 ---
 
-<Layout title={`标签:${tag} | ${siteConfig.title}`} description={`标签 ${tag} 下的所有文章`}>
+<Layout title={`标签:${tagName} | ${siteConfig.title}`} description={`标签 ${tagName} 下的所有文章`}>
   <TwoColumnLayout>
-    <Cover slot="cover" title={`包含标签"${tag}"的文章`} />
+    <Cover slot="cover" title={`包含标签"${tagName}"的文章`} />
     <HomeSider slot="sider" />
     <div class={`shadow-box mx-0 flex w-full flex-col bg-gradient-start ${CONTENT_PADDING.standard}`}>
       <h2 class="shoka-decoration-circle has-children group relative h-19 px-6 py-5 text-2xl/9 font-bold">
         <a
-          href={Astro.url.origin + '/tags'}
-          class="dashed-border text-muted-foreground group-hover:border-blue group-hover:text-blue border-b">全部</a
-        >
+          href="/tags"
+          class="dashed-border text-muted-foreground group-hover:border-blue group-hover:text-blue border-b"
+        >全部</a>
         <span class="text-muted-foreground text-lg"> / </span>
-        <span class="text-muted-foreground">{tag}</span>
+        <span class="text-muted-foreground">{tagName}</span>
         <span class="text-muted-foreground text-lg">({posts.length} 篇文章)</span>
       </h2>
+
       {
-        posts?.length && (
+        posts?.length > 0 ? (
           <div class="category-second-level-container flex flex-col">
             {posts.map((post) => {
-              const { link, name } = getPostLastCategory(post);
+              // 兼容 WP 数据：获取最后一个分类
+              const lastCategory = post.categories?.length ? post.categories[post.categories.length - 1] : '未分类';
+              const categoryLink = `/category/${lastCategory}`;
+
               return (
                 <p class="shoka-decoration-circle group text-primary relative px-6 py-2 text-base/9 md:overflow-visible">
                   <span class="text-muted-foreground inline-block w-15 text-xs md:relative md:-top-1">
-                    {displayDate.shortDate(post.data.date)}
+                    {displayDate.shortDate(post.date)}
                   </span>
                   <a
-                    href={Astro.url.origin + link}
+                    href={categoryLink}
                     class="text-muted-foreground hover:text-blue mr-2 inline-block text-xs md:relative md:-top-1"
                   >
-                    {name}
+                    {lastCategory}
                   </a>
-                  <a href={`/post/${encodeSlug(post?.data?.link ?? post.slug)}`} class="dashed-border md:absolute md:top-7 md:left-7">
-                    {post?.data?.title}
+                  <a href={`/post/${post.slug}`} class="dashed-border md:absolute md:top-7 md:left-7 hover:text-blue transition-colors">
+                    {post.title}
                   </a>
                 </p>
               );
             })}
           </div>
+        ) : (
+          <div class="px-6 py-10 text-muted-foreground">该标签下暂无文章</div>
         )
       }
     </div>

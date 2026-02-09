@@ -7,19 +7,29 @@ import type { AstroComponentFactory } from 'astro/runtime/server/index.js';
 import { christmasConfig } from '@/constants/site-config';
 
 interface Props {
-  Content?: AstroComponentFactory;
+  Content?: AstroComponentFactory | string;
   config?: Partial<ContentConfig>;
 }
 
-const { Content, config = {} } = Astro.props;
+const { Content: rawContent, config = {} } = Astro.props;
 const finalConfig = { ...defaultContentConfig, ...config };
+
+// 2. 判斷傳入的是組件還是字符串
+const isStringContent = typeof rawContent === 'string';
+
+// 3. 定義一個大寫開頭的組件變量用於渲染（如果是組件的話）
+const DisplayContent = !isStringContent ? rawContent : null;
 ---
 
 <div
   class:list={['custom-content', { 'relative z-5': christmasConfig.enabled && christmasConfig.features.snowfall }]}
   data-config={JSON.stringify(finalConfig)}
 >
-  {Content ? <Content /> : <slot />}
+  {isStringContent ? (
+      <div set:html={rawContent} />
+    ) : (
+      DisplayContent ? <DisplayContent /> : <slot />
+    )}
 </div>
 
 {/* React-based content enhancement (code blocks, mermaid, infographic toolbars) */}

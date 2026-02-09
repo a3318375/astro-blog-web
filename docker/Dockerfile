@@ -1,60 +1,54 @@
 # =============================================================================
-# astro-koharu Dockerfile
-# Multi-stage build for static site generation with nginx
-# =============================================================================
-
-# =============================================================================
-# Stage 1: Builder
-# Combines dependency installation and build in one stage to preserve pnpm
-# symlink structure (copying node_modules between stages breaks symlinks)
+# Stage 1: Builder (编译阶段)
 # =============================================================================
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-# Install pnpm
+# 安装 pnpm
 RUN corepack enable && corepack prepare pnpm@9.15.1 --activate
 
-# Copy package files first (for Docker layer caching)
+# 复制依赖文件（利用 Docker 缓存）
 COPY package.json pnpm-lock.yaml ./
 
-# Install dependencies (include dev deps for build)
-RUN pnpm install --frozen-lockfile --prod=false
+# 安装全量依赖（编译时需要 devDeps）
+RUN pnpm install --frozen-lockfile
 
-# Copy source files
+# 复制源码
 COPY . .
 
-# Build-time arguments for sensitive configuration
+# 编译环境变量
 ARG REMARK_URL
 ARG REMARK_SITE_ID
 ARG UMAMI_ID
 ARG UMAMI_ENDPOINT
-
-# Set environment variables for build
 ENV REMARK_URL=${REMARK_URL}
 ENV REMARK_SITE_ID=${REMARK_SITE_ID}
 ENV UMAMI_ID=${UMAMI_ID}
 ENV UMAMI_ENDPOINT=${UMAMI_ENDPOINT}
 
-# Build the static site
+# 执行构建：生成 dist/server 及其入口文件
 RUN pnpm build
 
 # =============================================================================
-# Stage 2: Production (nginx)
+# Stage 2: Production (运行时阶段)
 # =============================================================================
-FROM nginx:alpine AS production
+FROM node:22-alpine AS production
+WORKDIR /app
 
-# Copy nginx configuration
-COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
+# 设置生产环境变量
+ENV HOST=0.0.0.0
+ENV PORT=4321
+ENV NODE_ENV=production
 
-# Copy built static files
-COPY --from=builder /app/dist /usr/share/nginx/html
+# 从 builder 阶段复制构建产物和必要的依赖
+# 注意：SSR 运行需要 node_modules 中的运行时依赖
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
 
-# Expose port 80
-EXPOSE 80
+# 暴露 Astro 默认端口
+EXPOSE 4321
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
-
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# 启动 SSR 服务
+# 默认情况下 @astrojs/node 生成的入口文件路径如下
+CMD ["node", "./dist/server/entry.mjs"]

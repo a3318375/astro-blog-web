@@ -6,19 +6,20 @@ import { CONTENT_PADDING, PAGINATION } from '@constants/layout';
 import { seoConfig } from '@constants/site-config';
 import Layout from '@layouts/Layout.astro';
 import TwoColumnLayout from '@layouts/TwoColumnLayout.astro';
-import { getNonFeaturedPosts } from '@lib/content';
+import { transformWPPost } from '@lib/content';
 import { toPostCardDataList } from '@lib/content/transforms';
 import type { PaginateFunction } from 'astro';
 import Divider from '@/components/ui/divider';
 
-export async function getStaticPaths({ paginate }: { paginate: PaginateFunction }) {
-  // 获取所有非系列文章用于分页
-  const postCollections = await getNonFeaturedPosts();
-  return paginate(postCollections, { pageSize: PAGINATION.pageSize });
-}
-
 const { page } = Astro.props;
-const postCardData = toPostCardDataList(page.data);
+
+const { pageSize } = PAGINATION;
+const WP_URL = 'https://www.yuxh.cc';
+const regularRes = await fetch(`${WP_URL}/wp-json/wp/v2/posts?sticky=false&page=${page}&per_page=${pageSize}&_embed`);
+const postsData = await regularRes.json();
+
+const rawRecords = Array.isArray(postsData) ? postsData : [];
+const posts = rawRecords.map(transformWPPost);
 ---
 
 <Layout title={seoConfig.title}>
@@ -29,7 +30,7 @@ const postCardData = toPostCardDataList(page.data);
       class={`shadow-box bg-gradient-start tablet:shadow-none flex flex-col gap-4 overflow-hidden ${CONTENT_PADDING.standard}`}
     >
       <Divider>文章列表</Divider>
-      <PostList posts={postCardData} page={page} />
+      <PostList posts={posts} page={page} />
     </div>
   </TwoColumnLayout>
 </Layout>

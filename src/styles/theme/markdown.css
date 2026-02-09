@@ -317,8 +317,8 @@
     padding-inline-end: 0;
     overflow: hidden;
     margin: 0;
-    /* 覆盖 Typography 背景色 */
-    background-color: hsl(var(--card));
+    /* 覆盖 Typography 背景色
+    background-color: hsl(var(--card));*/
     /* 阴影 */
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
   }

@@ -1,0 +1,107 @@
+---
+// 1. 开启 SSR 模式
+export const prerender = false;
+
+import CustomContent from '@components/common/CustomContent.astro';
+import HomeSider from '@components/layout/HomeSider.astro';
+import SummaryPanel, { type SummarySource } from '@components/post/SummaryPanel';
+import Cover from '@components/ui/cover/Cover.astro';
+import { defaultContentConfig } from '@constants/content-config';
+import { HomeSiderType } from '@constants/enum';
+import { CONTENT_PADDING } from '@constants/layout';
+import { siteConfig } from '@constants/site-config';
+import Layout from '@layouts/Layout.astro';
+import TwoColumnLayout from '@layouts/TwoColumnLayout.astro';
+import { buildCategoryPath, getCategoryArr, transformWPPost } from '@lib/content';
+import { formatForSeo } from '@lib/date';
+import { Icon } from 'astro-icon/components';
+import { Comment } from '@/components/comment';
+
+// 2. 从 URL 获取 slug 并请求 WordPress
+const { slug } = Astro.params;
+const WP_URL = 'https://www.yuxh.cc';
+
+const response = await fetch(`${WP_URL}/wp-json/wp/v2/posts/${slug}?_embed`);
+const rawPost = await response.json();
+
+if (!response.ok) {
+  return Astro.redirect('/404');
+}
+
+// 3. 使用你之前定义的 transformWPPost 转换数据（扁平化结构）
+const postData = transformWPPost(rawPost);
+
+// 4. 为了兼容旧组件对 post.data 的引用，构造一个兼容对象
+const post = {
+  ...postData,
+  data: postData, // 这样 post.data.title 也能访问到
+  body: rawPost.content.rendered,
+};
+
+// 5. 提取变量（对应你原有的逻辑）
+const { title, categories = [], tags = [], date, math: postMath } = post.data;
+const Content = rawPost.content.rendered; // 直接使用字符串 HTML
+const hasMath = defaultContentConfig.enableMath !== false && postMath !== false;
+const finalDescription = post.data.description;
+
+// SEO & 麵包屑邏輯 (保持原有邏輯)
+const categoryArr = getCategoryArr(categories?.[0]);
+const categoryStr = categoryArr?.length ? ` | ${categoryArr.join(' / ')}` : '';
+const breadcrumbCategories = categoryArr.map((name, i) => ({
+  name,
+  link: buildCategoryPath(categoryArr.slice(0, i + 1)),
+}));
+
+// 摘要邏輯
+const summaryText = post.data.description;
+const summarySource: SummarySource = 'description';
+---
+
+<Layout
+  title={`${title}${categoryStr} | ${siteConfig.title}`}
+  description={finalDescription}
+  siderType={HomeSiderType.POST}
+  post={post}
+>
+  <!-- 代码高亮所需样式 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com" slot="head" />
+
+  <TwoColumnLayout post={post}>
+    <Cover slot="cover" data={post} />
+    <HomeSider slot="sider" type={HomeSiderType.POST} post={post} />
+
+    <div class={`shadow-box bg-gradient-start flex flex-col gap-2 ${CONTENT_PADDING.standard}`}>
+      <!-- Breadcrumb Navigation -->
+      <nav class="text-muted-foreground flex items-center justify-between gap-2 text-sm">
+        <div class="flex items-center gap-2">
+          <Icon name="fa6-solid:house-chimney" class="h-4 w-4" />
+          <a href="/">首页</a>
+          {breadcrumbCategories.map((cat) => (
+            <>
+              <Icon name="ri:arrow-right-s-line" class="h-4 w-4" />
+              <a href={cat.link} class="hover:text-blue transition-colors">{cat.name}</a>
+            </>
+          ))}
+        </div>
+      </nav>
+
+      {summaryText && <SummaryPanel client:visible summary={summaryText} source={summarySource} className="mt-2" />}
+
+      <article class="prose md:prose-sm dark:prose-invert">
+        <!-- 核心：传入 HTML 字符串 -->
+        <CustomContent Content={Content} />
+      </article>
+
+      <Comment />
+    </div>
+  </TwoColumnLayout>
+
+  <!-- 加载 Prism 脚本并手动触发 -->
+  <script src="https://cdnjs.cloudflare.com" is:inline></script>
+  <script src="https://cdnjs.cloudflare.com" is:inline></script>
+  <script is:inline>
+    const highlight = () => window.Prism && window.Prism.highlightAll();
+    document.addEventListener('astro:page-load', highlight);
+    highlight();
+  </script>
+</Layout>

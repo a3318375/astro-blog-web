@@ -30,6 +30,7 @@ import { remarkShokaRuby } from './src/lib/markdown/remark-shoka-ruby.ts';
 import { remarkShokaSpoiler } from './src/lib/markdown/remark-shoka-spoiler.ts';
 import { shokaMetaTransformer } from './src/lib/markdown/shiki-meta-transformer.ts';
 import { normalizeUrl } from './src/lib/utils.ts';
+import node from '@astrojs/node';
 
 // Load YAML config directly with Node.js (before Vite plugins are available)
 // This is only used in astro.config.mjs - other files use @rollup/plugin-yaml
@@ -159,6 +160,12 @@ if (contentConfig.enableCodeMeta !== false) shikiTransformers.push(shokaMetaTran
 // https://astro.build/config
 export default defineConfig({
   site: yamlConfig.site.url,
+  // 必须设置为 'server' 或 'hybrid'
+  output: 'server',
+  // SSR 模式必须安装并配置适配器
+  adapter: node({
+    mode: 'standalone',
+  }),
   compressHTML: true,
   markdown: {
     // Enable GitHub Flavored Markdown
