@@ -19,7 +19,7 @@ import { Comment } from '@/components/comment';
 
 // 2. 从 URL 获取 slug 并请求 WordPress
 const { slug } = Astro.params;
-const WP_URL = 'https://www.yuxh.cc';
+const WP_URL = 'https://www.yuxh.cc/wp';
 
 const response = await fetch(`${WP_URL}/wp-json/wp/v2/posts/${slug}?_embed`);
 const rawPost = await response.json();

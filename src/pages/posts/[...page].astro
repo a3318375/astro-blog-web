@@ -14,7 +14,7 @@ import Divider from '@/components/ui/divider';
 const { page } = Astro.props;
 
 const { pageSize } = PAGINATION;
-const WP_URL = 'https://www.yuxh.cc';
+const WP_URL = 'https://www.yuxh.cc/wp';
 const regularRes = await fetch(`${WP_URL}/wp-json/wp/v2/posts?sticky=false&page=${page}&per_page=${pageSize}&_embed`);
 const postsData = await regularRes.json();
 
